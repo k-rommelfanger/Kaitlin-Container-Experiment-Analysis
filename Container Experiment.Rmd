@@ -13,6 +13,8 @@ use_git_config(user.name="k-rommelfanger",user.email="k.rommelfanger07@gmail.com
 use_git()#this pushes the project into git and gives you a git tab
 library(usethis)#how you connect to github
 use_github()
+
+#make a change!
 ```
 
 
