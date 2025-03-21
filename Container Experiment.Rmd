@@ -1,0 +1,727 @@
+---
+title: "Container Experiment"
+author: "Kaitlin Rommelfanger"
+date: "2024-05-31"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+Exponential growth model 
+
+```{r Data Cleaning Container Extension Data}
+library(readxl)
+library(lubridate)
+library(tidyverse)
+library(plotrix)
+
+#import data 
+ContMon <- read_excel("data/Container Experiment Outplant Extension (CLEANED).xlsx", 
+    col_types = c("numeric", "numeric", "numeric", 
+        "date", "text", "text", "text", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "text", "text", "text", 
+        "text", "numeric", "numeric", "numeric", 
+        "text", "text"))
+#this is telling the class of the columns in the dataframe while imiporting, did this because it was making the orange field tag ID a logical instead of numeric
+
+length(unique(ContMon$OriginalPropID))
+#we want to see 42 unique IDs, if there are more that means that something got entered wrong
+
+
+unique(ContMon$ContainerType)
+#looking to make sure we only have our three container types and no NAs
+
+
+#using lubridate to make r recognize  dates, this is helpful because now it will sort all the observations in order over time moving forward
+ContMon$DateOfProcessing<-ymd(ContMon$DateOfProcessing)
+
+#double checking the number of dates that are in the dataframe
+length(unique(ContMon$DateOfProcessing))
+#44 dates and counting
+
+
+#until 10/7/22 measuring epicotyl length, after mix of total length and epi lenghts, this has been updated accordingly in the dataframe prior to download
+
+#will need to go into the dataframe for the nursery part of this experiment and get the hypocotyl length so I can add that to the epi lengths prior to 10/7/22 and then I can plot total lengths over time 
+
+
+#first I am plotting how many of each treatment type survived over time
+ContMon$`Dead/Alive/Dying`<-as.factor(ContMon$`Dead/Alive/Dying`)
+
+
+Survival<-ContMon%>%
+  filter(`Dead/Alive/Dying`=="A"|`Dead/Alive/Dying`=="DY")%>%
+  group_by(DateOfProcessing, ContainerType)%>%
+  summarise(numAlive=length(`Dead/Alive/Dying`))%>%
+  ggplot(aes(x=DateOfProcessing, y=numAlive, color=ContainerType))+
+  geom_point()+
+  geom_line()
+
+Survival
+
+#this plot shows some trees dying and coming back to life and dying again.. going to investigate this, there is most certianly a better way to do this, I am just filtering each individual tagID and looking  at them in order by dates (spoiler alert better way below)
+
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="589")
+
+
+#574 658 606 586 726 660 666 673 641 684 573 620 689 623 555 579 588 659 675 611 576 556 608 664 583 691 661 671 552 709 554 553 682 730 685 589 570 601 593 619 652 638
+
+
+#checked, 574, 658, 606, 586, 726,660,673,573,623,555,579,588, 659, 691,661,552,553,682,
+#zombie trees
+#666: first dead 9/30/22, 8/31/23
+#673: 8/26/22, 12/16/22
+#641: 8/19/22, 9/9/22
+#684:10/14/22 randomly alive again on 5/25/23
+#689: 10/21/22, 1/13/23,  6/14/23
+#675,611,576,556,709,554: randomly alive 5/25/23
+#608, 664, 620,730,570,601,593,619,652,638: randomly dead 5/25/23
+#583: flopping between alive and dying and dead 
+#671: change to dead after 6/9/22
+#685: marked dead one week then makes recovery next, worth keeping
+#589: should be dead after 6/17/22
+
+
+#this way is very inefficient, but I did ID 5.25.23 as a problem day, I double checked the datasheet for 5/25/23, everything matches the datasheet, so I do not trust the data from this day, removing all data from this day, this resolves a lot of my zombie trees but not all of them
+
+ContMon<-ContMon%>%filter(DateOfProcessing!="2023-05-25")
+
+#check to make sure that this date is removed
+length(unique(ContMon$DateOfProcessing))
+
+#plot again, to see my changes 
+Survival1<-ContMon%>%
+  filter(`Dead/Alive/Dying`=="A"|`Dead/Alive/Dying`=="DY")%>%
+  group_by(DateOfProcessing, ContainerType)%>%
+  summarise(numAlive=length(`Dead/Alive/Dying`))%>%
+  ggplot(aes(x=DateOfProcessing, y=numAlive, color=ContainerType))+
+  geom_point()+
+  geom_line()
+
+Survival1
+#looking a little better after removing 5/25, but going to check on some other dates
+
+
+#found a better way to Identify potential zombies! (plants recorded dead that were later alive)
+
+
+#we group by the PropID, then create a new column (ZombiePlants) using lag, that shows the value in the column previous. Then we ungroup, to make sure that everything after is applied to the whole dataframe, then filtering for all the dates where trees were alive. After that filter for trees that on the previous monitoring day were dead, dying, or gone
+ContCheck<-ContMon%>%
+  group_by(OriginalPropID)%>%
+  mutate(ZombiePlants=lag(`Dead/Alive/Dying`))%>%
+  ungroup()%>%
+  filter(`Dead/Alive/Dying`=="A")%>%
+  filter(ZombiePlants=="D"|ZombiePlants=="DY"|ZombiePlants=="GONE")
+
+#identify my potential zombie plants
+unique(ContCheck$OriginalPropID)
+#problem children identified! 556 583 606 623 641 658 666 671 673 675 684 685 689 709
+
+#now I am going to look at these individually and see if anything needs modifying 
+
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="556")#running this before and after for each tag so I can make sure the code put things off correctly
+
+#556, ZOMBIE cut off at first dead  8/5/22
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="556")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="556"&DateOfProcessing>="2022-08-12"))
+#583, ZOMBIE cut off 10.28.22
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="583"&DateOfProcessing>="2022-11-04"))
+
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="583")
+#606, ok keep all 
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="606")
+#623, last day 7/8/22
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="623")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="623"&DateOfProcessing>="2022-07-22"))
+#641, ZOMBIE cut off 8/19/22
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="641")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="641"&DateOfProcessing>="2022-08-26"))
+#658, all good (just dyind sometimes then bounces back)!
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="658")
+#666, ZOMBIE cut off at 8/31/23
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="666")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="666"&DateOfProcessing>="2023-09-25"))
+#671, dead at 6/9/22
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="671")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="671"&DateOfProcessing>="2022-06-17"))
+#673,looks ok dead 12/16/22
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="673")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="673"&DateOfProcessing>="2023-01-13"))
+#675, dead 9/2/22 data looks good otherwise not zombie
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="675")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="675"&DateOfProcessing>="2022-09-09"))
+#684, dead 10/14/22 data looks good otherwisse not zombie
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="684")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="684"&DateOfProcessing>="2022-10-21"))
+#685, ZOMBIE after 8/5/22 (one dead still in there going to leave it)
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="685")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="685"&DateOfProcessing>="2022-10-07"))
+#689,looks ok, missing one week but keep at last dead
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="689")
+
+ContMon<-ContMon%>%
+  filter(!(OriginalPropID=="689"&DateOfProcessing>="2023-02-10"))
+#709, looks good not zombie
+ContCheck1<-ContMon%>%
+  filter(OriginalPropID=="709")
+
+#replot after cleaned
+Survival2<-ContMon%>%
+  filter(`Dead/Alive/Dying`=="A"|`Dead/Alive/Dying`=="DY")%>%
+  group_by(DateOfProcessing, ContainerType)%>%
+  summarise(numAlive=length(`Dead/Alive/Dying`))%>%
+  ggplot(aes(x=DateOfProcessing, y=numAlive, color=ContainerType))+
+  geom_point()+
+  geom_line()
+
+Survival2
+
+#still a few zombies, but this is ok because there was enough data after the initial D recording to warrant keeping it after
+```
+
+
+```{r Check Number Alive}
+
+#check to make sure that all trees are only monitored once per day
+Check<-ContMon%>%
+  group_by(DateOfProcessing,OriginalPropID)%>%
+  summarise(NumberMon=n())%>%
+  filter(NumberMon>1)
+
+#this counts the number of times each ID number is monitored each day, then filters for where they are monitored more than once, because the DF is empty there are not times where they are monitored more than once
+```
+
+
+```{r Look at original Intake Data & Plot Total Lengths}
+library(readr)
+library(tidyverse)
+library(patchwork)
+
+#this is the intake data for the propagules
+Setup <- read_csv("data/ContainerSetupData.csv")
+
+
+#rename total length so can distinguish between intake and total length for monitoring 
+Setup<-Setup%>%
+  rename(IntakeTotalLength=`Total length (cm)`)
+#rename epi lenght to intake epi length
+Setup<-Setup%>%
+  rename(IntakeEpiLenght=`Epicotyl length (cm)`)
+
+#determine hypocotyl length so I can get total lengths for all the plants,select for prop info to join df together
+Setup<-Setup%>%
+  mutate(HypoLength =IntakeTotalLength-IntakeEpiLenght)%>%
+  rename(OriginalPropID=`Tag #`)%>%
+  select(OriginalPropID,`Mass (g)`,IntakeTotalLength,IntakeEpiLenght, HypoLength,`Diameter (mm)`, `Collection Date`)
+
+#join the intake data to the Monitoring data so I can determine total lengths for all the plants that just have epicotyl lengths
+
+LengthJoin<-left_join(ContMon,Setup, by="OriginalPropID")
+
+#add epi and hypo to get total length, when total length was not measured (if total lenght is na, add epi and hypo lenght, if not report total length)
+
+LengthJoin<-LengthJoin%>%
+mutate(
+    TreeLength = if_else(is.na(TotalLength), EpicotylLength + HypoLength, TotalLength)
+  )
+
+
+LengthJoin$OriginalPropID<-as.factor(LengthJoin$OriginalPropID)
+
+
+#now we plot total length over time
+
+#biobag
+BBLengthPlot<-LengthJoin%>%
+  filter(ContainerType=="BB")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("BioBag")
+
+BBLengthPlot
+
+#CC
+CCLengthPlot<-LengthJoin%>%
+  filter(ContainerType=="CC")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("Containter")
+
+CCLengthPlot
+
+#TP
+
+TPLengthPlot<-LengthJoin%>%
+  filter(ContainerType=="TP")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("TreePot")
+
+TPLengthPlot
+
+```
+
+
+
+```{r Plot Only Trees that Still Alive}
+library(lubridate)
+library(patchwork)
+
+#making a list of all the tags that we are still currently monitoring that are alive
+tagsalive<-c(574,658,606,586,660,573,620,555,579,659,608,664,691,661,552,730,570,601,593,619,652,638)
+
+#filtering for trees that are alive
+LivingTrees<-LengthJoin%>%
+  filter(OriginalPropID %in% tagsalive)
+
+#biobag
+BBLive<-LivingTrees%>%
+  filter(ContainerType=="BB")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("BioBag")
+
+BBLive
+
+#what is going on with 570?
+
+Check570<-LivingTrees%>%
+  filter(OriginalPropID==570)
+
+#CC
+CCLive<-LivingTrees%>%
+  filter(ContainerType=="CC")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("Conetainer")
+
+CCLive
+
+#TP
+
+TPLive<-LivingTrees%>%
+  filter(ContainerType=="TP")%>%
+  ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("TreePot")
+
+TPLive
+
+
+all<-TPLive+CCLive+BBLive
+all
+
+#date of processing as date
+LivingTrees$DateOfProcessing<-ymd(LivingTrees$DateOfProcessing)
+
+#determine growth rate over time of living trees (current length-previous length/time)
+LivingTreesGrowth<-LivingTrees%>%
+  group_by(OriginalPropID)%>%
+  mutate(PreviousLength=lag(TreeLength))%>%
+  mutate(LenghtChange=TreeLength-PreviousLength)
+
+#determine the time interval between monitoring sessions
+LivingTreesGrowth<-LivingTreesGrowth%>%
+  group_by(OriginalPropID)%>%
+  mutate(PrevMonDate=lag(DateOfProcessing))%>%
+  mutate(TimeInterval=DateOfProcessing-PrevMonDate)
+
+LivingTreesGrowth$TimeInterval<-as.numeric(LivingTreesGrowth$TimeInterval)
+
+#determine growth rate
+LivingTreesGrowth<-LivingTreesGrowth%>%
+  mutate(GrowthRate=LenghtChange/TimeInterval)
+
+
+#check everything
+Check<-LivingTreesGrowth%>%
+  filter(OriginalPropID==658)
+
+#all the calculations look correct, we have a lot of negative growth..
+
+#plot
+#biobag
+BBGrowth<-LivingTreesGrowth%>%
+  filter(ContainerType=="BB")%>%
+  ggplot(aes(x=DateOfProcessing,y=LenghtChange, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("BioBag")
+
+BBGrowth
+
+#CC
+CCGrowth<-LivingTreesGrowth%>%
+  filter(ContainerType=="CC")%>%
+  ggplot(aes(x=DateOfProcessing,y=LenghtChange, color=OriginalPropID))+
+  geom_point()+
+    geom_line()
+
+CCGrowth
+
+#TP
+
+TPLive<-LivingTreesGrowth%>%
+  filter(ContainerType=="TP")%>%
+  ggplot(aes(x=DateOfProcessing,y=LenghtChange, color=OriginalPropID))+
+  geom_point()+
+    geom_line()
+
+TPLive  
+
+
+#there is a lot of fluctuation in the growth 
+
+C664<-LivingTreesGrowth%>%
+  filter(OriginalPropID==664)
+
+
+```
+
+```{r Number of Leaves Plot}
+
+#weirdness is happening here.. there is no branches leaves and total leaves for 9/25 going to remove 9/25 and replot
+
+LeafTrees<-LivingTrees%>%
+  filter(DateOfProcessing!="2023-09-25")
+
+#biobag
+BBLeafPlot<-LeafTrees%>%
+  filter(ContainerType=="BB")%>%
+  ggplot(aes(x=DateOfProcessing,y=TotalLeaves, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("BioBag")
+
+BBLeafPlot
+
+#CC
+CCLeafPlot<-LeafTrees%>%
+  filter(ContainerType=="CC")%>%
+  ggplot(aes(x=DateOfProcessing,y=TotalLeaves, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("Containter")
+
+CCLeafPlot
+
+#TP
+
+TPLeafPlot<-LeafTrees%>%
+  filter(ContainerType=="TP")%>%
+  ggplot(aes(x=DateOfProcessing,y=TotalLeaves, color=OriginalPropID))+
+  geom_point()+
+    geom_line()+
+  ggtitle("TreePot")
+
+TPLeafPlot
+```
+
+```{r Fix Nursery Data Prop ID Numbers}
+library(readr)
+library(lubridate)
+
+# I input the nursery data into r, then found that there were extra ID numbers, so I fixed that in the excel sheet, dont need to redo this, but keeping the code so we know what happened 
+
+#input datasheet, all nursery monitoring data 
+NurseryData <- read_csv("data/NurseryMonitoring.csv")
+
+#look at the structure of the dataframe and make some changes
+str(NurseryData)
+
+NurseryData$`Epicotyl length (cm)`<-as.numeric(NurseryData$`Epicotyl length (cm)`)
+
+NurseryData$Treatment<-as.factor(NurseryData$Treatment)
+
+NurseryData$Condition<-as.factor(NurseryData$Condition)
+
+#maked date a date
+NurseryData$`Date Processed`<-mdy(NurseryData$`Date Processed`)
+
+unique(NurseryData$`Monitoring Session`)
+
+unique(NurseryData$`Propagule ID`)
+#we have too many,192, should only be 180, there is some data entry errors here
+
+#going to ID the rows that have propagule IDs that we dont have from setup 
+propIDcheck<-anti_join(NurseryData,Setup, by=c("Propagule ID"="OriginalPropID"))
+
+#we have 12 rows that have IDs that were entered incorrectly
+unique(propIDcheck$`Date Processed`)
+#these dates: "2021-09-24" "2021-10-28" "2022-01-05" "2022-01-26" "2022-03-18" "2022-04-04" "2021-10-21" "2021-12-09" "2022-01-02"
+unique(propIDcheck$`Propagule ID`)
+#270 525 536 528 761 512 782 530 427 923 516
+
+
+#now I am going to look for IDs that are in the setup DF that are not in the DF on these dates, then I'll know which ones are missing and can fix them
+
+#9/24/24 270-> 570
+
+
+#10/28/28, tag #s 525 and 536 
+#filter for all tags in this monitoring session, #5
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="5")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+#changed to 552 and 556 all fixed!
+
+
+#1.5.22 monitoring sesh 15
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="15")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+#potential numbers are 652, 664, 728, winner is 728 
+
+
+# looking at props on 1.26. 28 761 and 512 filtering for all the dates that are in this monitoring session 
+propIDcheck1<-NurseryData%>%
+  filter(`Date Processed`=="2022-01-26"|`Date Processed`=="2022-01-28"|`Date Processed`=="2022-01-24")
+
+#then looking for ID numbers that are in the setup DF but not in this filtered DF for these dates to see if my random IDs could be one of these looking for #761 and 512
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+unique(propIDcheck2$OriginalPropID)
+#572 604 637 661 721 728  NA
+
+#looks like these numbers should be 661 and 572, I looked at the epi lenghts on the previous monitoring session and these numbers make sense
+
+#next date 3/18 monitoring sesh 24
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="24")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+#changed to 582
+
+
+#next date 4/4/22 monitoring sesh 27
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="27")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+#none of these make sense, going to delete this row
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="530")
+
+#10/21/21 monitor sesh 4, ID 427
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="4")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+#remove 427
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="427")
+
+#923, 12/9/21
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="11")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+#changed to 723
+
+#516 on 1.2.22
+propIDcheck1<-NurseryData%>%
+  filter(`Monitoring Session`=="14")
+#then looking for ID numbers that are in the setup DF but not in this filtered DF 
+propIDcheck2<-anti_join(Setup,propIDcheck1,by=c("OriginalPropID"="Propagule ID"))
+
+#that should be all of them!
+```
+
+
+```{r Clean Nursery Data}
+library(readr)
+library(lubridate)
+
+#input cleaned datasheet, all nursery monitoring data 
+NurseryData <- read_csv("data/NurseryMonitoring.csv")
+
+#look at the structure of the dataframe and make some changes
+str(NurseryData)
+
+NurseryData$`Epicotyl length (cm)`<-as.numeric(NurseryData$`Epicotyl length (cm)`)
+
+NurseryData$Treatment<-as.factor(NurseryData$Treatment)
+
+NurseryData$Condition<-as.factor(NurseryData$Condition)
+
+#makes date processed a date
+NurseryData$`Date Processed`<-mdy(NurseryData$`Date Processed`)
+
+unique(NurseryData$`Monitoring Session`)
+
+#deleting prop ID 530 and 427 because of checking done above, (not an id from setup, data entry error )
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="530")
+
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="427")
+
+unique(NurseryData$`Propagule ID`)
+#we have 180! problem solved!!!!
+
+#now I'm going to ID dates where we have trees monitored more than once on the same date
+
+Counts <- NurseryData %>%
+  group_by(`Propagule ID`, `Monitoring Session`) %>%
+  tally() %>%
+  filter(n > 1)
+#this happens 530 times, I need to remove dates where this happens 
+#going to remove duplicate rows, then see how many that fixes
+
+#this will remove the rows where trees are monitored twice on the same monitoring day and have the same epi lenght (but this removes both rows, don't want to remove both, going to redo this)
+NurseryDataUnique <- NurseryData[!duplicated(NurseryData[c("Monitoring Session", "Propagule ID","Epicotyl length (cm)")]), ]
+
+#recheck my counts
+duplicates <- NurseryDataUnique %>%
+  group_by(across(c(`Propagule ID`, `Monitoring Session`))) %>%
+  tally() %>%
+  filter(n > 1)%>%
+  ungroup()
+#that takes us down to 126 times that they are counted twice in the same monitoring session
+
+unique(duplicate_rows$`Propagule ID`)
+#there are 95 different trees that were monitored twice within a monitoring session
+
+unique(duplicate_rows$`Monitoring Session`)
+#29 different monitoring sessions 
+
+# I think I am going to delete both rows for these duplicate within the monitoring session that have different epi lengths, because sometimes the lengths don't make sense and I don't have a way of knowing which is correct, have 5742 rows before doing this
+
+NurseryDataUnique <- NurseryDataUnique %>%
+  anti_join(duplicates, by = c("Monitoring Session", "Propagule ID"))
+#this removed all the duplicate rows!
+
+#check that only three treatments
+unique(NurseryData$Treatment)
+
+#look at the number monitored over time
+NumberMon<-NurseryDataUnique%>%
+  group_by(`Monitoring Session`,Treatment)%>%
+  summarise(NumMonitored=length(`Propagule ID`))%>%
+  ggplot(aes(x=`Monitoring Session`,y=NumMonitored,color=Treatment))+
+  geom_point()+
+  geom_line()
+
+NumberMon
+
+
+week10<-NurseryData%>%
+  filter(`Monitoring Session`=="10")
+
+
+#Now look at survivor ship over time and check for zombie plants
+
+NurserySurvival<-NurseryData%>%
+  filter(`Dead/Alive/Dying`=="A"|`Dead/Alive/Dying`=="DY"|`Dead/Alive/Dying`=="Dy")%>%
+  group_by(`Monitoring Session`, Treatment)%>%
+  summarise(numAlive=length(`Dead/Alive/Dying`))%>%
+  ggplot(aes(x=`Monitoring Session`, y=numAlive, color=Treatment))+
+  geom_point()+
+  geom_line()
+
+NurserySurvival
+
+#lots of jumping back and forth 
+
+```
+
+```{r Nursery Data Start Over}
+
+NurseryData <- read_csv("data/NurseryMonitoring.csv")
+
+#deleting prop ID 530 and 427 because of checking done above, (not an id from setup, data entry error )
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="530")
+
+NurseryData<-NurseryData%>%
+  filter(`Propagule ID`!="427")
+
+#look at the number of trees monitored for each treatment over time
+NumberMon<-NurseryData%>%
+  group_by(`Monitoring Session`,Treatment)%>%
+  summarise(NumMonitored=length(`Propagule ID`))%>%
+  ggplot(aes(x=`Monitoring Session`,y=NumMonitored,color=Treatment))+
+  geom_point()+
+  geom_line()+
+  geom_hline(yintercept = 60, linetype = "dashed", color = "black") 
+  
+
+NumberMon
+
+#look at the total number of trees monitored in each session 
+
+TotalNumberMon<-NurseryData%>%
+  group_by(`Monitoring Session`)%>%
+  summarise(AllMon=length(`Propagule ID`))%>%
+   ggplot(aes(x=`Monitoring Session`,y=AllMon))+
+  geom_point()+
+  geom_line()+
+  geom_hline(yintercept = 180, linetype = "dashed", color = "red") 
+
+TotalNumberMon
+
+
+#I want to see the whole row for the times when trees were monitored twice
+
+Dtrees <- duplicated(NurseryData[c("Monitoring Session", "Propagule ID")]) | duplicated(NurseryData[c("Monitoring Session","Propagule ID")], fromLast = TRUE)
+
+# Create a dataframe with only the duplicated rows
+NurseryDupes <- NurseryData[Dtrees, ]
+
+
+# View the result
+print(duplicates_df)
+
+
+```
+
+
+
