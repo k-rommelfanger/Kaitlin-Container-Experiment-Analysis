@@ -8,9 +8,11 @@ editor_options:
 ---
 
 ```{r Add this project to Github!}
-library(usethis)
+library(usethis)#to connect your project to git
 use_git_config(user.name="k-rommelfanger",user.email="k.rommelfanger07@gmail.com")
-use_git()
+use_git()#this pushes the project into git and gives you a git tab
+library(usethis)#how you connect to github
+use_github()
 ```
 
 
