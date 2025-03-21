@@ -7,6 +7,12 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r Add this project to Github!}
+library(usethis)
+use_git_config(user.name="k-rommelfanger",user.email="k.rommelfanger07@gmail.com")
+use_git()
+```
+
 
 Exponential growth model 
 
