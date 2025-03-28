@@ -277,13 +277,17 @@ LengthJoin$OriginalPropID<-as.factor(LengthJoin$OriginalPropID)
 
 #now we plot total length over time
 
-#biobag
+#biobag(make font in ggplot specific font)
+windowsFonts(Times=windowsFont("Times New Roman"))
+
+
 BBLengthPlot<-LengthJoin%>%
   filter(ContainerType=="BB")%>%
   ggplot(aes(x=DateOfProcessing,y=TreeLength, color=OriginalPropID))+
   geom_point()+
     geom_line()+
-  ggtitle("BioBag")
+  ggtitle("BioBag")+
+  theme(text=element_text(family="Times"))#make the font times new roman
 
 BBLengthPlot
 
@@ -309,7 +313,6 @@ TPLengthPlot<-LengthJoin%>%
 TPLengthPlot
 
 ```
-
 
 
 ```{r Plot Only Trees that Still Alive}
